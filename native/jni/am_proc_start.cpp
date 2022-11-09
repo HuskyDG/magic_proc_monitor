@@ -5,6 +5,10 @@
 #include <cinttypes>
 #include <android/log.h>
 #include <sys/system_properties.h>
+#include "crawl_procfs.hpp"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <signal.h>
 
 using namespace std;
 
@@ -109,6 +113,35 @@ void ProcessBuffer(struct logger_entry *buf) {
     }
 }
 
+void kill_other(struct stat me){
+    crawl_procfs([=](int pid) -> bool {
+   	    struct stat st;
+        char path[128];
+   	    sprintf(path, "/proc/%d/exe", pid);
+        if (stat(path,&st)!=0)
+            return true;
+        if (st.st_dev == me.st_dev && st.st_ino == me.st_ino) {
+       	    fprintf(stderr, "Killed: %d\n", pid);
+       	    kill(pid, SIGKILL);
+        }
+        return true;
+    });
+}
+
 int main(int argc, char *argv[]) {
-    Run();
+	struct stat me;
+    if (argc > 1 && argv[1] == "--kill"sv) {
+        if (stat(argv[0],&me)!=0)
+            return 1;
+        kill_other(me);
+        return 0;
+    }
+
+	if (argc > 1 && argv[1] == "--keep"sv) {
+        signal(SIGTERM, SIG_IGN);
+    }
+
+	Run();
+        
+    return 0;
 }
