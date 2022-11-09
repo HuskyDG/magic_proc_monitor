@@ -1,0 +1,3 @@
+[submodule "native/jni/libcxx"]
+	path = native/jni/libcxx
+	url = https://github.com/huskydg/libcxx.git

@@ -1,0 +1,6 @@
+id=am_proc_start
+name=am_proc_start
+author=HuskyDG
+version=1.0
+versionCode=1
+description=Tool for monitoring app process start
