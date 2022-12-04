@@ -86,7 +86,7 @@ typedef struct [[gnu::packed]] {
 }
 
 int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5, const char *arg6){
-    string BB = string(MAGISKTMP) + "/.magisk/busybox/busybox";
+    string BB = "/proc/1/root/"s + string(MAGISKTMP) + "/.magisk/busybox/busybox";
     int p_fork = fork();
     int status = 0;
     if (p_fork == 0){
@@ -118,7 +118,7 @@ void run_daemon(int pid, int uid, const char *process, int user){
         // run script before enter the mount namespace of target app process
         kill(pid, SIGSTOP);
         for (auto i = 0; i < module_list.size(); i++){
-            string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_list[i] + "/dynmount.sh"s;
+            string script = "/data/adb/modules/"s + module_list[i] + "/dynmount.sh"s;
             if (access(script.data(), F_OK) != 0) continue;
             LOGI("run %s#prepareEnterMntNs [%s] pid=[%d]", module_list[i].data(), process, pid);
             int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process, user_str);
@@ -150,7 +150,7 @@ void run_daemon(int pid, int uid, const char *process, int user){
         kill(pid, SIGSTOP);
         if (!switch_mnt_ns(pid)){
             for (auto i = 0; i < module_run.size(); i++){
-                string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_run[i] + "/dynmount.sh"s;
+                string script = "/data/adb/modules/"s + module_run[i] + "/dynmount.sh"s;
                 // run script
                 LOGI("run %s#EnterMntNs [%s] pid=[%d]", module_run[i].data(), process, pid);
                 int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process, user_str);
