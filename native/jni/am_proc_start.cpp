@@ -83,12 +83,12 @@ typedef struct [[gnu::packed]] {
 
 }
 
-int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5){
+int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5, const char *arg6){
     string BB = string(MAGISKTMP) + "/.magisk/busybox/busybox";
     int p_fork = fork();
     int status = 0;
     if (p_fork == 0){
-        execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, (char*)0);
+        execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, arg6, (char*)0);
         _exit(1);
     } else if (p_fork > 0){
         waitpid(p_fork, &status, 0);
@@ -98,13 +98,15 @@ int run_script(const char *arg1, const char *arg2, const char *arg3, const char 
     }
 }
 
-void run_daemon(int pid, int uid, const char *process){
+void run_daemon(int pid, int uid, const char *process, int user){
     if (fork_dont_care()==0){
         struct stat ppid_st, pid_st;
         char pid_str[10];
         char uid_str[10];
+        char user_str[10];
         snprintf(pid_str, 10, "%d", pid);
         snprintf(uid_str, 10, "%d", uid);
+        snprintf(user_str, 10, "%d", uid);
         int i=0;
         vector<string> module_run;
         // run script before enter the mount namespace of target app process
@@ -113,7 +115,7 @@ void run_daemon(int pid, int uid, const char *process){
             string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_list[i] + "/dynmount.sh"s;
             if (access(script.data(), F_OK) != 0) continue;
             LOGI("run %s#prepareEnterMntNs [%s] pid=[%d]", module_list[i].data(), process, pid);
-            int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process);
+            int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process, user_str);
                 LOGI("run %s#prepareEnterMntNs [%s] pid=[%d] exited with code %d", module_list[i].data(), process, pid, ret/256);
             if (ret == 0) module_run.emplace_back(module_list[i]);
         }
@@ -145,7 +147,7 @@ void run_daemon(int pid, int uid, const char *process){
                 string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_run[i] + "/dynmount.sh"s;
                 // run script
                 LOGI("run %s#EnterMntNs [%s] pid=[%d]", module_run[i].data(), process, pid);
-                int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process);
+                int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process, user_str);
                 LOGI("run %s#EnterMntNs [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
             }
         }
@@ -168,7 +170,7 @@ void ProcessBuffer(struct logger_entry *buf) {
         char process_name[4098];
         // process name
         snprintf(process_name, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
-        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, process_name);
+        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, process_name, am_proc_start->user.data);
     } else {
         printf("%" PRId32" %" PRId32" %" PRId32" %.*s\n",
            am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,

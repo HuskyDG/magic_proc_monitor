@@ -1,0 +1,6 @@
+id=example_dynmount
+name=Example module for dynamic mount
+author=HuskyDG
+version=1.0
+versionCode=1
+description=Example
