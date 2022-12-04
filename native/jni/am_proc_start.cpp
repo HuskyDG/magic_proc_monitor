@@ -107,23 +107,28 @@ void run_daemon(int pid, int uid, const char *process){
         snprintf(uid_str, 10, "%d", uid);
         int i=0;
         vector<string> module_run;
-        // stop process
+        // run script before enter the mount namespace of target app process
         kill(pid, SIGSTOP);
         for (auto i = 0; i < module_list.size(); i++){
             string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_list[i] + "/dynmount.sh"s;
             if (access(script.data(), F_OK) != 0) continue;
-            LOGI("run prepareEnterMntNs for pid %d: %s", pid, module_list[i].data());
+            LOGI("run %s#prepareEnterMntNs [%s] pid=[%d]", module_list[i].data(), process, pid);
             int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process);
-            LOGI("script %s exited with status %d", script.data(), ret);
+                LOGI("run %s#prepareEnterMntNs [%s] pid=[%d] exited with code %d", module_list[i].data(), process, pid, ret/256);
             if (ret == 0) module_run.emplace_back(module_list[i]);
         }
         kill(pid, SIGCONT);
+
+        // if there is no script we want to run in app mount namespace
         if (module_run.size() < 1) {
-            LOGI("no module to run EnterMntNs script for pid %d", pid);
+            LOGI("no module to run EnterMntNs [%s] pid=[%d]", process, pid);
             _exit(0);
         }
         do {
-            if (i>=300000) _exit(0);
+            if (i>=300000) {
+                LOGW("timeout for wait EnterMntNs [%s] pid=[%d], the mount namespace is not unshared!", process, pid);
+                _exit(0);
+            }
             if (read_ns(pid,&pid_st) == -1 ||
                 read_ns(parse_ppid(pid),&ppid_st) == -1)
                 _exit(0);
@@ -132,15 +137,16 @@ void run_daemon(int pid, int uid, const char *process){
         } while (pid_st.st_ino == ppid_st.st_ino &&
                 pid_st.st_dev == ppid_st.st_dev);
         
-        // stop process
+        // run script after enter the mount namespace of target app process
+        // magisk module can modify mount namespce by doing mount/unmount
         kill(pid, SIGSTOP);
         if (!switch_mnt_ns(pid)){
             for (auto i = 0; i < module_run.size(); i++){
                 string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_run[i] + "/dynmount.sh"s;
                 // run script
-                LOGI("run EnterMntNs for pid %d: %s", pid, module_run[i].data());
+                LOGI("run %s#EnterMntNs [%s] pid=[%d]", module_run[i].data(), process, pid);
                 int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process);
-                LOGI("script %s exited with status %d", script.data(), ret);
+                LOGI("run %s#EnterMntNs [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
             }
         }
         kill(pid, SIGCONT);
@@ -159,7 +165,10 @@ void ProcessBuffer(struct logger_entry *buf) {
         LOGI("proc_monitor: user=[%" PRId32"] pid=[%" PRId32"] uid=[%" PRId32"] process=[%.*s]\n",
            am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
            am_proc_start->process_name.length, am_proc_start->process_name.data);
-        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, am_proc_start->process_name.data);
+        char process_name[4098];
+        // process name
+        snprintf(process_name, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
+        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, process_name);
     } else {
         printf("%" PRId32" %" PRId32" %" PRId32" %.*s\n",
            am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
