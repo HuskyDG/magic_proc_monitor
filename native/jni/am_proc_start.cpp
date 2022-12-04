@@ -20,6 +20,8 @@ using namespace std;
 
 int myself;
 
+#define API_VERSION "2"
+
 const char *MAGISKTMP = nullptr;
 vector<string> module_list;
 
@@ -88,6 +90,9 @@ int run_script(const char *arg1, const char *arg2, const char *arg3, const char 
     int p_fork = fork();
     int status = 0;
     if (p_fork == 0){
+        setenv("API_VERSION", API_VERSION, 1);
+        setenv("MAGISKTMP", MAGISKTMP, 1);
+        setenv("ASH_STANDALONE", "1", 1);
         execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, arg6, (char*)0);
         _exit(1);
     } else if (p_fork > 0){
@@ -109,6 +114,7 @@ void run_daemon(int pid, int uid, const char *process, int user){
         snprintf(user_str, 10, "%d", uid);
         int i=0;
         vector<string> module_run;
+
         // run script before enter the mount namespace of target app process
         kill(pid, SIGSTOP);
         for (auto i = 0; i < module_list.size(); i++){

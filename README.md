@@ -1,4 +1,4 @@
-# am_proc_start
+# Magisk Process Monitor Tool
 
-- Tool for monitoring app process start and allow modules to run script in app process name space.
-- Check `example_module` folder for making module to use am_proc_start
+- Tool for monitoring app process start and allow modules to run script in app process namespace.
+- Every [dynmount.sh](./magisk-module/dynmount.sh) in module folder will be run when an app process start. Check example in `example_module` folder.
