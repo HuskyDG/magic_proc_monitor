@@ -1,6 +1,6 @@
-id=am_proc_start
-name=am_proc_start
+id=magisk_proc_monitor
+name=Magisk process monitor tool
 author=HuskyDG
 version=1.0
 versionCode=1
-description=Tool for monitoring app process start
+description=Tool for monitoring app process start and allow modules to run script in app process name space

@@ -5,12 +5,23 @@
 #include <cinttypes>
 #include <android/log.h>
 #include <sys/system_properties.h>
-#include "crawl_procfs.hpp"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <signal.h>
+#include "crawl_procfs.hpp"
+#include "cus.hpp"
+#include <libgen.h>
+#include <sys/mount.h>
+#include <vector>
+#include "logging.h"
 
 using namespace std;
+
+int myself;
+
+const char *MAGISKTMP = nullptr;
+vector<string> module_list;
 
 extern "C" {
 
@@ -72,14 +83,88 @@ typedef struct [[gnu::packed]] {
 
 }
 
+int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5){
+    string BB = string(MAGISKTMP) + "/.magisk/busybox/busybox";
+    int p_fork = fork();
+    int status = 0;
+    if (p_fork == 0){
+        execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, (char*)0);
+        _exit(1);
+    } else if (p_fork > 0){
+        waitpid(p_fork, &status, 0);
+        return status;
+    } else {
+        return -1;
+    }
+}
+
+void run_daemon(int pid, int uid, const char *process){
+    if (fork_dont_care()==0){
+        struct stat ppid_st, pid_st;
+        char pid_str[10];
+        char uid_str[10];
+        snprintf(pid_str, 10, "%d", pid);
+        snprintf(uid_str, 10, "%d", uid);
+        int i=0;
+        vector<string> module_run;
+        // stop process
+        kill(pid, SIGSTOP);
+        for (auto i = 0; i < module_list.size(); i++){
+            string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_list[i] + "/dynmount.sh"s;
+            if (access(script.data(), F_OK) != 0) continue;
+            LOGI("run prepareEnterMntNs for pid %d: %s", pid, module_list[i].data());
+            int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process);
+            LOGI("script %s exited with status %d", script.data(), ret);
+            if (ret == 0) module_run.emplace_back(module_list[i]);
+        }
+        kill(pid, SIGCONT);
+        if (module_run.size() < 1) {
+            LOGI("no module to run EnterMntNs script for pid %d", pid);
+            _exit(0);
+        }
+        do {
+            if (i>=300000) _exit(0);
+            if (read_ns(pid,&pid_st) == -1 ||
+                read_ns(parse_ppid(pid),&ppid_st) == -1)
+                _exit(0);
+            usleep(10);
+            i++;
+        } while (pid_st.st_ino == ppid_st.st_ino &&
+                pid_st.st_dev == ppid_st.st_dev);
+        
+        // stop process
+        kill(pid, SIGSTOP);
+        if (!switch_mnt_ns(pid)){
+            for (auto i = 0; i < module_run.size(); i++){
+                string script = string(MAGISKTMP) + "/.magisk/modules/"s + module_run[i] + "/dynmount.sh"s;
+                // run script
+                LOGI("run EnterMntNs for pid %d: %s", pid, module_run[i].data());
+                int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process);
+                LOGI("script %s exited with status %d", script.data(), ret);
+            }
+        }
+        kill(pid, SIGCONT);
+        _exit(0);
+    }
+}
+
+
+
 void ProcessBuffer(struct logger_entry *buf) {
     auto *eventData = reinterpret_cast<const unsigned char *>(buf) + buf->hdr_size;
     auto *event_header = reinterpret_cast<const android_event_header_t *>(eventData);
     if (event_header->tag != 30014) return;
     auto *am_proc_start = reinterpret_cast<const android_event_am_proc_start *>(eventData);
-    printf("%" PRId32" %" PRId32" %" PRId32" %.*s\n",
+    if (MAGISKTMP) {
+        LOGI("proc_monitor: user=[%" PRId32"] pid=[%" PRId32"] uid=[%" PRId32"] process=[%.*s]\n",
            am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
            am_proc_start->process_name.length, am_proc_start->process_name.data);
+        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, am_proc_start->process_name.data);
+    } else {
+        printf("%" PRId32" %" PRId32" %" PRId32" %.*s\n",
+           am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
+           am_proc_start->process_name.length, am_proc_start->process_name.data);
+    }
 }
 
 [[noreturn]] void Run() {
@@ -115,33 +200,70 @@ void ProcessBuffer(struct logger_entry *buf) {
 
 void kill_other(struct stat me){
     crawl_procfs([=](int pid) -> bool {
-   	    struct stat st;
+        struct stat st;
         char path[128];
-   	    sprintf(path, "/proc/%d/exe", pid);
+        sprintf(path, "/proc/%d/exe", pid);
         if (stat(path,&st)!=0)
             return true;
+        if (pid == myself)
+            return true;
         if (st.st_dev == me.st_dev && st.st_ino == me.st_ino) {
-       	    fprintf(stderr, "Killed: %d\n", pid);
-       	    kill(pid, SIGKILL);
+            fprintf(stderr, "Killed: %d\n", pid);
+            kill(pid, SIGKILL);
         }
         return true;
     });
 }
 
+void prepare_modules(){
+    string MODULEDIR = string(MAGISKTMP) + "/.magisk/modules";
+    DIR *dirfp = opendir(MODULEDIR.data());
+    if (dirfp != nullptr){
+        dirent *dp;
+        while ((dp = readdir(dirfp))) {
+            if (dp->d_name == "."sv || dp->d_name == ".."sv) continue;
+            char buf[strlen(MODULEDIR.data()) + 1 + strlen(dp->d_name) + 20];
+            snprintf(buf, sizeof(buf), "%s/%s/", MODULEDIR.data(), dp->d_name);
+            char *z = buf + strlen(MODULEDIR.data()) + 1 + strlen(dp->d_name) + 1;
+            strcpy(z, "disable");
+            if (access(buf, F_OK) == 0) continue;
+            strcpy(z, "remove");
+            if (access(buf, F_OK) == 0) continue;
+            LOGI("Magisk module: %s", dp->d_name);
+            module_list.emplace_back(string(dp->d_name));
+        }
+        closedir(dirfp);
+    }
+}
+            
+
 int main(int argc, char *argv[]) {
-	struct stat me;
-    if (argc > 1 && argv[1] == "--kill"sv) {
-        if (stat(argv[0],&me)!=0)
-            return 1;
+    if (getuid()!=0) return 1;
+    struct stat me;
+    myself = self_pid();
+    
+    if (stat(argv[0],&me)!=0)
+        return 1;
+
+    if (argc > 1 && argv[1] == "--stop"sv) {
         kill_other(me);
         return 0;
     }
-
-	if (argc > 1 && argv[1] == "--keep"sv) {
-        signal(SIGTERM, SIG_IGN);
+    if (argc > 1 && argv[1] == "--start"sv) {
+        MAGISKTMP = "/sbin";
+        if (argc > 2) MAGISKTMP = argv[2];
+        kill_other(me);
+        if (fork_dont_care()==0){
+            fprintf(stderr, "New daemon: %d\n", self_pid());
+            LOGI("MAGISKTMP is %s", MAGISKTMP);
+            if (switch_mnt_ns(1))
+                _exit(0);
+            signal(SIGTERM, SIG_IGN);
+            prepare_modules();
+            Run();
+            _exit(0);
+        }
+        return 0;
     }
-
-	Run();
-        
-    return 0;
+    Run();
 }
