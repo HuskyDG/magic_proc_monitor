@@ -5,7 +5,7 @@
 ## How to use
 
 - Every [dynmount.sh](./magisk-module/dynmount.sh) script in module folder will be run when an app process start, before and after enter the mount namespace of app process (`prepareEnterMntNs` and `EnterMntNs`)
-- You can dynamically mount and unmount something which only apply for that app process when `EnterMntNs`
+- You can dynamically mount and unmount something which only apply for that app process when `EnterMntNs`. You can make some cool mods such as blocking access to some folder by mount `tmpfs` on some folder or bind mount the modified apk over the original one, etc...
 - <https://github.com/Magisk-Modules-Alt-Repo/data_isolation_support> is a good example module.
 
 ## Credit
