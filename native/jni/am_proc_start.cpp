@@ -22,7 +22,13 @@ int myself;
 
 #define API_VERSION "2"
 
+#define PROPFILE string(string(MODPATH) + "/module.prop").data()
+#define PROPMIRR string(string(MAGISKTMP) + "/.magisk/modules/" + string(MODNAME) + "/module.prop").data()
+#define ___write(text) if (MAGISKTMP) __write_module_status(text, PROPFILE, PROPMIRR)
+
 const char *MAGISKTMP = nullptr;
+char *MODPATH = nullptr;
+char *MODNAME = nullptr;
 vector<string> module_list;
 
 extern "C" {
@@ -187,6 +193,7 @@ void ProcessBuffer(struct logger_entry *buf) {
 [[noreturn]] void Run() {
     while (true) {
         bool first;
+        bool work = false;
         __system_property_set("persist.log.tag", "");
 
         unique_ptr<logger_list, decltype(&android_logger_list_free)> logger_list{
@@ -207,10 +214,14 @@ void ProcessBuffer(struct logger_entry *buf) {
                 first = false;
                 continue;
             }
-
+            if (!work) {
+                ___write("\U0001F60A Process monitor is working fine");
+                work = true;
+            }
             ProcessBuffer(&msg.entry);
         }
-
+        ___write("\U0001F635 Logcat is not working or broken!");
+        work = false;
         sleep(1);
     }
 }
@@ -272,9 +283,11 @@ int main(int argc, char *argv[]) {
         kill_other(me);
         if (fork_dont_care()==0){
             fprintf(stderr, "New daemon: %d\n", self_pid());
-            LOGI("MAGISKTMP is %s", MAGISKTMP);
             if (switch_mnt_ns(1))
                 _exit(0);
+            LOGI("MAGISKTMP is %s", MAGISKTMP);
+            MODPATH = dirname(argv[0]);
+            MODNAME = basename(MODPATH);
             signal(SIGTERM, SIG_IGN);
             prepare_modules();
             Run();
