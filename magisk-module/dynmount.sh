@@ -21,6 +21,8 @@ RUN_SCRIPT(){
 prepareEnterMntNs(){
     # script run before enter the mount name space of app process
 
+    # su 2000 -c "cmd notification post -S bigtext -t 'Process monitor' 'Tag' 'pid="$PID" uid="$UID" "$PROC"'"
+
     #exit 0 # allow script to run in EnterMntNs stage
     exit 1 # close script and don't allow script to run in EnterMntNs stage
 }
@@ -28,7 +30,7 @@ prepareEnterMntNs(){
 
 EnterMntNs(){
     # script run after enter the mount name space of app process and you allow this script to run in EnterMntNs stage
-
+    exit 0
 }
 
 RUN_SCRIPT
