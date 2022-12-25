@@ -20,7 +20,7 @@ using namespace std;
 
 int myself;
 
-#define API_VERSION "2"
+#define API_VERSION "3"
 
 #define PROPFILE string(string(MODPATH) + "/module.prop").data()
 #define PROPMIRR string(string(MAGISKTMP) + "/.magisk/modules/" + string(MODNAME) + "/module.prop").data()
@@ -120,6 +120,7 @@ void run_daemon(int pid, int uid, const char *process, int user){
         snprintf(user_str, 10, "%d", uid);
         int i=0;
         vector<string> module_run;
+        vector<string> module_run_st2;
 
         // run script before enter the mount namespace of target app process
         kill(pid, SIGSTOP);
@@ -161,8 +162,37 @@ void run_daemon(int pid, int uid, const char *process, int user){
                 LOGI("run %s#EnterMntNs [%s] pid=[%d]", module_run[i].data(), process, pid);
                 int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process, user_str);
                 LOGI("run %s#EnterMntNs [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
+                if (ret == 0) module_run_st2.emplace_back(module_run[i]);
+            }
+            if (module_run_st2.size() < 1) {
+                LOGI("no module to run OnSetUID [%s] pid=[%d]", process, pid);
+                goto unblock_process;
+            }
+            kill(pid, SIGCONT);
+            string path = "/proc/"s + pid_str;
+            int count = 0;
+            do {
+                int ret = stat(path.data(), &pid_st);
+                count++;
+                if (count >= 300000) {
+                    LOGW("timeout for wait OnSetUID [%s] pid=[%d], uid is not changed", process, pid);
+                    goto unblock_process;
+                }
+                if (ret == -1)
+                    continue;
+                usleep(10);
+            } while (pid_st.st_uid == 0);
+            kill(pid, SIGSTOP);
+            
+            for (auto i = 0; i < module_run_st2.size(); i++){
+                string script = "/data/adb/modules/"s + module_run_st2[i] + "/dynmount.sh"s;
+                // run script
+                LOGI("run %s#OnSetUID [%s] pid=[%d]", module_run_st2[i].data(), process, pid);
+                int ret = run_script(script.data(), "OnSetUID", pid_str, uid_str, process, user_str);
+                LOGI("run %s#OnSetUID [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
             }
         }
+        unblock_process:
         kill(pid, SIGCONT);
         _exit(0);
     }

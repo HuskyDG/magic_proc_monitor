@@ -9,28 +9,39 @@ USERID="$5" # USER ID of app
 # API_VERSION = 2
 # Enable ash standalone
 # Enviroment variables: MAGISKTMP, API_VERSION
+# API_VERSION = 3
+STAGE="$1" # prepareEnterMntNs or EnterMntNs or OnSetUID
 
 RUN_SCRIPT(){
     if [ "$STAGE" == "prepareEnterMntNs" ]; then
         prepareEnterMntNs
     elif [ "$STAGE" == "EnterMntNs" ]; then
         EnterMntNs
+    elif [ "$STAGE" == "OnSetUID" ]; then
+        OnSetUID
     fi
 }
 
 prepareEnterMntNs(){
-    # script run before enter the mount name space of app process
+    # this function run on app pre-initialize
 
     # su 2000 -c "cmd notification post -S bigtext -t 'Process monitor' 'Tag' 'pid="$PID" uid="$UID" "$PROC"'"
 
-    #exit 0 # allow script to run in EnterMntNs stage
-    exit 1 # close script and don't allow script to run in EnterMntNs stage
+    # call exit 0 to let script to be run in EnterMntNs
+    exit 1 # close script
 }
 
 
 EnterMntNs(){
-    # script run after enter the mount name space of app process and you allow this script to run in EnterMntNs stage
-    exit 0
+    # this function will be run when mount namespace of app process is unshared
+    # call exit 0 to let script to be run in OnSetUID
+    exit 1 # close script
+}
+
+
+OnSetUID(){
+    # this function will be run when UID is changed from 0 to $UID
+    exit 1 # close script
 }
 
 RUN_SCRIPT
