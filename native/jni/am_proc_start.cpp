@@ -117,7 +117,7 @@ void run_daemon(int pid, int uid, const char *process, int user){
         char user_str[10];
         snprintf(pid_str, 10, "%d", pid);
         snprintf(uid_str, 10, "%d", uid);
-        snprintf(user_str, 10, "%d", uid);
+        snprintf(user_str, 10, "%d", user);
         int i=0;
         vector<string> module_run;
         vector<string> module_run_st2;
