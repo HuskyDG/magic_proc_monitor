@@ -1,6 +1,6 @@
 id=magisk_proc_monitor
 name=Process Monitor Tool
 author=HuskyDG
-version=1.5
-versionCode=6
-description=Monitor app process start and allow modules to run script in app process mount namespace
+version=2.0
+versionCode=7
+description=Provide the way for modules to run script whenever app process start. More information, please visit http://github.com/huskydg/magisk_proc_monitor
