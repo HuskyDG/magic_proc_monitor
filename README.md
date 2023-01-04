@@ -1,6 +1,10 @@
 # Magisk Process Monitor Tool (Dynamic Mount)
 
-- Simple tool for monitoring app process start and allow modules to run script in app process namespace with or without inject into app process
+- Simple tool for monitoring app process start and allow modules to run script in app process namespace with or without inject into app process. In short, run script everytime lanching an app (every app can run different logic, see [dynmount.sh](./magisk-module/dynmount.sh))
+
+## Requirements
+
+- Can be installed as Magisk or Zygisk module. For the normal version, it will use `logcat` for monitoring app process start. For zygisk, require Zygisk API 3+ (mean Magisk version code >= 24300)
 
 ## How to use
 
