@@ -10,6 +10,7 @@ if [ "$(magisk --sqlite "SELECT value FROM settings WHERE (key='zygisk')")" == "
     cp -af "$MODPATH/libs/$ABI/proc_monitor" "$MODPATH/zygisk/$ABI.so"
     cp -af "$MODPATH/libs/$ABI32/proc_monitor" "$MODPATH/zygisk/$ABI32.so"
     rm -rf "$MODPATH/service.sh"
+    sed -Ei 's/^description=(\[.*][[:space:]]*)?/description=[ Zygisk version ] /g' "$MODPATH/module.prop"
 else
     ui_print "- Install as normal module"
     cp -af "$MODPATH/libs/$ABI/proc_monitor" "$MODPATH/proc_monitor"

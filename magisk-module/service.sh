@@ -11,5 +11,6 @@ flock "$MODDIR/module.prop"
 
 mount --bind "$TMPFILE" "$PROPFILE"
 
+chmod 777 "$MODDIR/proc_monitor"
 unshare -m "$MODDIR/proc_monitor" --start "$MAGISKTMP"
 exit 0
