@@ -59,8 +59,9 @@ private:
     void preServer() {
         int r = 0;
         int fd = api->connectCompanion();
+        int pid = getpid();
         int zero = 0;
-        write(fd, &zero, sizeof(zero));
+        write(fd, &pid, sizeof(pid));
         write(fd, &zero, sizeof(zero));
         write(fd, "system_server", sizeof("system_server"));
         read(fd, &r, sizeof(r));
@@ -83,7 +84,7 @@ static void companion_handler(int i) {
     write(i, &done, sizeof(int));
     int user = uid / 100000;
     //LOGD("companion_handler: [%s] PID=[%d] UID=[%d]\n", process, pid, uid);
-    if (strcmp(process,"system_server") == 0 && pid == 0 && uid == 0 && !module_loaded){
+    if (strcmp(process,"system_server") == 0 && uid == 0 && !module_loaded){
         char buf[256];
         int s = readlink("/proc/self/exe", buf, sizeof(buf));
         if (s > 0) {
@@ -92,7 +93,6 @@ static void companion_handler(int i) {
             prepare_modules();
             module_loaded = true;
         }
-        return;
     }
 	if (module_loaded) {
         run_daemon(pid, uid, process, user);
