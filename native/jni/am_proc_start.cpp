@@ -136,14 +136,14 @@ void run_scripts(int pid, int uid, const char *process, int user) {
             return;
         }
         do {
-            if (i>=300000) {
+            if (i>=30000) {
                 LOGW("timeout for wait EnterMntNs [%s] pid=[%d], the mount namespace is not unshared!", process, pid);
                 return;
             }
             if (read_ns(pid,&pid_st) == -1 ||
                 read_ns(parse_ppid(pid),&ppid_st) == -1)
                 return;
-            usleep(10);
+            usleep(100);
             i++;
         } while (pid_st.st_ino == ppid_st.st_ino &&
                 pid_st.st_dev == ppid_st.st_dev);
@@ -170,14 +170,14 @@ void run_scripts(int pid, int uid, const char *process, int user) {
             do {
                 int ret = stat(path.data(), &pid_st);
                 count++;
-                if (count >= 300000) {
+                if (count >= 30000) {
                     LOGW("timeout for wait OnSetUID [%s] pid=[%d], uid is not changed", process, pid);
                     goto unblock_process;
                 }
                 if (ret == -1)
                     continue;
-                usleep(10);
-            } while (pid_st.st_uid == 0);
+                usleep(100);
+            } while (pid_st.st_uid != uid);
             kill(pid, SIGSTOP);
             
             for (auto i = 0; i < module_run_st2.size(); i++){
@@ -210,9 +210,7 @@ void ProcessBuffer(struct logger_entry *buf) {
     if (event_header->tag != 30014) return;
     auto *am_proc_start = reinterpret_cast<const android_event_am_proc_start *>(eventData);
     if (MAGISKTMP) {
-        LOGI("proc_monitor: user=[%" PRId32"] pid=[%" PRId32"] uid=[%" PRId32"] process=[%.*s]\n",
-           am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
-           am_proc_start->process_name.length, am_proc_start->process_name.data);
+        ___write("\U0001F60A Process monitor is working fine");
         char process_name[4098];
         // process name
         snprintf(process_name, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
@@ -249,7 +247,7 @@ void ProcessBuffer(struct logger_entry *buf) {
                 continue;
             }
             if (!work) {
-                ___write("\U0001F60A Process monitor is working fine");
+                ___write("\U0001F60A Process monitor is working fine but am_proc_start is not detected");
                 work = true;
             }
             ProcessBuffer(&msg.entry);
