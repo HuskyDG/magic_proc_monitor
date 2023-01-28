@@ -107,7 +107,9 @@ int run_script(const char *arg1, const char *arg2, const char *arg3, const char 
 
 void run_scripts(int pid, int uid, const char *process, int user) {
     do {
-        struct stat ppid_st, pid_st;
+        struct stat ppid_st, pid_st, init_st;
+        if (read_ns(1,&init_st) == -1)
+            return;
         char pid_str[10];
         char uid_str[10];
         char user_str[10];
@@ -145,8 +147,10 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 return;
             usleep(100);
             i++;
-        } while (pid_st.st_ino == ppid_st.st_ino &&
-                pid_st.st_dev == ppid_st.st_dev);
+        } while ((pid_st.st_ino == ppid_st.st_ino &&
+                pid_st.st_dev == ppid_st.st_dev) ||
+                 (pid_st.st_ino == init_st.st_ino &&
+                pid_st.st_dev == init_st.st_dev));
         
         // run script after enter the mount namespace of target app process
         // magisk module can modify mount namespce by doing mount/unmount
