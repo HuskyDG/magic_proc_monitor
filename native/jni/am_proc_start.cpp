@@ -107,21 +107,24 @@ int run_script(const char *arg1, const char *arg2, const char *arg3, const char 
 
 void run_scripts(int pid, int uid, const char *process, int user) {
     do {
+        kill(pid, SIGSTOP);
         struct stat ppid_st, pid_st, init_st;
-        if (read_ns(1,&init_st) == -1)
-            return;
+        if (read_ns(1,&init_st) == -1) {
+            kill(pid, SIGSTOP);
+            break;
+        }
+
         char pid_str[10];
         char uid_str[10];
         char user_str[10];
+        int i=0;
         snprintf(pid_str, 10, "%d", pid);
         snprintf(uid_str, 10, "%d", uid);
         snprintf(user_str, 10, "%d", user);
-        int i=0;
         vector<string> module_run;
         vector<string> module_run_st2;
 
         // run script before enter the mount namespace of target app process
-        kill(pid, SIGSTOP);
         for (auto i = 0; i < module_list.size(); i++){
             string script = "/data/adb/modules/"s + module_list[i] + "/dynmount.sh"s;
             if (access(script.data(), F_OK) != 0) continue;
@@ -213,6 +216,7 @@ void ProcessBuffer(struct logger_entry *buf) {
     auto *event_header = reinterpret_cast<const android_event_header_t *>(eventData);
     if (event_header->tag != 30014) return;
     auto *am_proc_start = reinterpret_cast<const android_event_am_proc_start *>(eventData);
+    kill(am_proc_start->pid.data, SIGSTOP);
     if (MAGISKTMP) {
         ___write("\U0001F60A Process monitor is working fine");
         char process_name[4098];
