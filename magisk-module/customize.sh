@@ -24,14 +24,20 @@ elif [ "$ABI" == "x64" ] || [ "$ABI" == "x86_64" ]; then
 fi
 
 [ ! -d "$TMPDIR/libs/$ABI" ] && abort "! $ABI not supported"
-if [ "$(magisk --sqlite "SELECT value FROM settings WHERE (key='zygisk')")" == "value=1" ]; then
-    ui_print "- Install as Zygisk module"
+{
+    randomc="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 15)"
+    ui_print "- Patch service: ${randomc}"
+    ui_print "- Install Zygisk libraries"
     mkdir "$MODPATH/zygisk"
     cp -af "$TMPDIR/libs/$ABI/proc_monitor" "$MODPATH/zygisk/$ABI.so"
     cp -af "$TMPDIR/libs/$ABI32/proc_monitor" "$MODPATH/zygisk/$ABI32.so"
-    sed -Ei 's/^description=(\[.*][[:space:]]*)?/description=[ Zygisk version ] /g' "$MODPATH/module.prop"
-else
-    ui_print "- Install as normal module"
+    sed -i "s/proc_monitor__PLACEHOLDERNAME/proc_monitor__${randomc}/g" "$MODPATH/zygisk/$ABI.so"
+    sed -i "s/proc_monitor__PLACEHOLDERNAME/proc_monitor__${randomc}/g" "$MODPATH/zygisk/$ABI32.so"
+    ui_print "- Install execute binary"
     cp -af "$TMPDIR/libs/$ABI/proc_monitor" "$MODPATH/proc_monitor"
+    sed -i "s/proc_monitor__PLACEHOLDERNAME/proc_monitor__${randomc}/g" "$MODPATH/proc_monitor"
     unzip -o "$ZIPFILE" post-fs-data.sh -d "$MODPATH"
-fi
+}
+
+cp -af "$TMPDIR/libs/$ABI/busybox" "$MODPATH/busybox"
+chmod 777 "$MODPATH/busybox"

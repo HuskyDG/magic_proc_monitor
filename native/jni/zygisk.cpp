@@ -6,6 +6,7 @@
 #include <cstring>
 #include <libgen.h>
 
+#include "cus.hpp"
 #include "zygisk.hpp"
 
 using zygisk::Api;
@@ -85,14 +86,9 @@ static void companion_handler(int i) {
     int user = uid / 100000;
     //LOGD("companion_handler: [%s] PID=[%d] UID=[%d]\n", process, pid, uid);
     if (strcmp(process,"system_server") == 0 && uid == 0 && !module_loaded){
-        char buf[256];
-        int s = readlink("/proc/self/exe", buf, sizeof(buf));
-        if (s > 0) {
-            MAGISKTMP = dirname(buf);
-            LOGD("Magisk tmp path is %s\n", MAGISKTMP);
-            prepare_modules();
-            module_loaded = true;
-        }
+        kill_all(SECRETNAME);
+        prepare_modules();
+        module_loaded = true;
     }
 	if (module_loaded) {
         run_daemon(pid, uid, process, user);

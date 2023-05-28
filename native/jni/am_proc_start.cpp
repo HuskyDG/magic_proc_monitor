@@ -14,6 +14,9 @@
 #include <libgen.h>
 #include <sys/mount.h>
 #include <vector>
+#include <sys/sendfile.h>
+#include <fcntl.h>
+
 #include "logging.h"
 
 using namespace std;
@@ -22,10 +25,14 @@ int myself;
 
 #define API_VERSION "4"
 
-extern const char *MAGISKTMP = nullptr;
 char *MODPATH = nullptr;
 char *MODNAME = nullptr;
 vector<string> module_list;
+
+char* prop_mirror = nullptr;
+char* prop_status = nullptr;
+
+bool write_propfd = false;
 
 extern "C" {
 
@@ -88,12 +95,11 @@ typedef struct [[gnu::packed]] {
 }
 
 int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5, const char *arg6){
-    string BB = "/proc/1/root/"s + string(MAGISKTMP) + "/.magisk/busybox/busybox";
+    string BB = "/data/adb/modules/magisk_proc_monitor/busybox";
     int p_fork = fork();
     int status = 0;
     if (p_fork == 0){
         setenv("API_VERSION", API_VERSION, 1);
-        setenv("MAGISKTMP", MAGISKTMP, 1);
         setenv("ASH_STANDALONE", "1", 1);
         execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, arg6, (char*)0);
         _exit(1);
@@ -211,16 +217,12 @@ void ProcessBuffer(struct logger_entry *buf) {
     auto *event_header = reinterpret_cast<const android_event_header_t *>(eventData);
     if (event_header->tag != 30014) return;
     auto *am_proc_start = reinterpret_cast<const android_event_am_proc_start *>(eventData);
-    if (MAGISKTMP) {
+    {
         ___write("\U0001F60A Process monitor is working fine");
         char process_name[4098];
         // process name
         snprintf(process_name, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
         run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, process_name, am_proc_start->user.data);
-    } else {
-        printf("%" PRId32" %" PRId32" %" PRId32" %.*s\n",
-           am_proc_start->user.data, am_proc_start->pid.data, am_proc_start->uid.data,
-           am_proc_start->process_name.length, am_proc_start->process_name.data);
     }
 }
 
@@ -278,7 +280,7 @@ void kill_other(struct stat me){
 }
 
 void prepare_modules(){
-    string MODULEDIR = string(MAGISKTMP) + "/.magisk/modules";
+    string MODULEDIR = "/data/adb/modules";
     DIR *dirfp = opendir(MODULEDIR.data());
     if (dirfp != nullptr){
         dirent *dp;
@@ -312,14 +314,20 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (argc > 1 && argv[1] == "--start"sv) {
-        MAGISKTMP = "/sbin";
-        if (argc > 2) MAGISKTMP = argv[2];
         kill_other(me);
+        int prop_fd[] = { open(PROPFILE, O_RDONLY), open(WPROPFILE , O_RDWR | O_CREAT, 0644) };
+        struct stat stat_buf;
+        write_propfd = stat(PROPFILE, &stat_buf) == 0 && sendfile(prop_fd[1], prop_fd[0], 0, stat_buf.st_size) > 0 &&
+            mount(WPROPFILE, PROPFILE, nullptr, MS_BIND, nullptr) == 0;
+        prop_mirror = new char[128];
+        prop_status = new char[128];
+        snprintf(prop_mirror, 128, "/proc/self/fd/%d", prop_fd[0]);
+        snprintf(prop_status, 128, "/proc/self/fd/%d", prop_fd[1]);
+        set_nice_name(SECRETNAME);
         if (fork_dont_care()==0){
             fprintf(stderr, "New daemon: %d\n", self_pid());
             if (switch_mnt_ns(1))
                 _exit(0);
-            LOGI("MAGISKTMP is %s", MAGISKTMP);
             MODPATH = dirname(argv[0]);
             MODNAME = basename(MODPATH);
             signal(SIGTERM, SIG_IGN);
