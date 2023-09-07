@@ -107,6 +107,7 @@ int run_script(const char *arg1, const char *arg2, const char *arg3, const char 
 
 void run_scripts(int pid, int uid, const char *process, int user) {
     do {
+        kill(pid, SIGSTOP);
         struct stat ppid_st, pid_st, init_st;
         char pid_str[10];
         char uid_str[10];
@@ -118,26 +119,6 @@ void run_scripts(int pid, int uid, const char *process, int user) {
         vector<string> module_run;
         vector<string> module_run_st2;
 
-        string path = "/proc/"s + pid_str;
-        do {
-            if (stat(path.data(), &pid_st) == -1)
-                return;
-            usleep(1000);
-        } while (pid_st.st_uid != uid);
-
-        char buf[1024] = { '\0' };
-        path += "/cmdline";
-        do {
-            FILE *fp = fopen(path.data(), "re");
-            if (fp == nullptr)
-                return;
-            fgets(buf, sizeof(buf), fp);
-            fclose(fp);
-            usleep(1000);
-        } while (strstr(process, buf) != process);
-
-        kill(pid, SIGSTOP);
-
         // run script before enter the mount namespace of target app process
         for (auto i = 0; i < module_list.size(); i++){
             string script = "/data/adb/modules/"s + module_list[i] + "/dynmount.sh"s;
@@ -147,28 +128,31 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 LOGI("run %s#prepareEnterMntNs [%s] pid=[%d] exited with code %d", module_list[i].data(), process, pid, ret/256);
             if (ret == 0) module_run.emplace_back(module_list[i]);
         }
+        kill(pid, SIGCONT);
 
         // if there is no script we want to run in app mount namespace
         if (module_run.size() < 1) {
             LOGI("no module to run EnterMntNs [%s] pid=[%d]", process, pid);
-            goto unblock_process;
+            return;
         }
+        do {
+            if (i>=30000) {
+                LOGW("timeout for wait EnterMntNs [%s] pid=[%d], the mount namespace is not unshared!", process, pid);
+                return;
+            }
+            if (read_ns(pid,&pid_st) == -1 ||
+                read_ns(parse_ppid(pid),&ppid_st) == -1)
+                return;
+            usleep(100);
+            i++;
+        } while ((pid_st.st_ino == ppid_st.st_ino &&
+                pid_st.st_dev == ppid_st.st_dev) ||
+                 (pid_st.st_ino == init_st.st_ino &&
+                pid_st.st_dev == init_st.st_dev));
         
-        if (read_ns(1,&init_st) == -1 ||
-            read_ns(parse_ppid(pid),&ppid_st) == -1)
-            goto unblock_process;
-
-        if (read_ns(pid,&pid_st) == -1)
-            // process died unexpectedly
-            break;  
-
-        if ((pid_st.st_ino == ppid_st.st_ino &&
-             pid_st.st_dev == ppid_st.st_dev) ||
-            (pid_st.st_ino == init_st.st_ino &&
-             pid_st.st_dev == init_st.st_dev))
-            // namespace is not detached
-            break;
-
+        // run script after enter the mount namespace of target app process
+        // magisk module can modify mount namespce by doing mount/unmount
+        kill(pid, SIGSTOP);
         if (!switch_mnt_ns(pid)){
             for (auto i = 0; i < module_run.size(); i++){
                 string script = "/data/adb/modules/"s + module_run[i] + "/dynmount.sh"s;
@@ -182,6 +166,22 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 LOGI("no module to run OnSetUID [%s] pid=[%d]", process, pid);
                 goto unblock_process;
             }
+            kill(pid, SIGCONT);
+            string path = "/proc/"s + pid_str;
+            int count = 0;
+            do {
+                int ret = stat(path.data(), &pid_st);
+                count++;
+                if (count >= 30000) {
+                    LOGW("timeout for wait OnSetUID [%s] pid=[%d], uid is not changed", process, pid);
+                    goto unblock_process;
+                }
+                if (ret == -1)
+                    continue;
+                usleep(100);
+            } while (pid_st.st_uid != uid);
+            kill(pid, SIGSTOP);
+            
             for (auto i = 0; i < module_run_st2.size(); i++){
                 string script = "/data/adb/modules/"s + module_run_st2[i] + "/dynmount.sh"s;
                 // run script
