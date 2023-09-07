@@ -11,6 +11,13 @@ USERID="$5" # USER ID of app
 # Enviroment variables: MAGISKTMP, API_VERSION
 # API_VERSION = 3
 STAGE="$1" # prepareEnterMntNs or EnterMntNs or OnSetUID
+# API_VERSION = 4
+# Enviroment variables provided by KernelSU: 
+# KSU_VERSION - KernelSU version, "-1" is not installed
+# KSU_ON_UNMOUNT - true if process is on unmount
+# KSU_ON_GRANTED - true if process is granted su access
+# For Magisk, please use magisk command, example: MAGISKTMP="$(magisk --path)"
+
 
 RUN_SCRIPT(){
     if [ "$STAGE" == "prepareEnterMntNs" ]; then
