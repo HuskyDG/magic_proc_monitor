@@ -16,6 +16,7 @@
 #include <vector>
 #include <sys/sendfile.h>
 #include <fcntl.h>
+#include <sys/prctl.h>
 
 #include "logging.h"
 
@@ -24,6 +25,9 @@ using namespace std;
 int myself;
 
 #define API_VERSION "4"
+
+#define CMD_UID_GRANTED_ROOT 12
+#define CMD_UID_SHOULD_UMOUNT 13
 
 char *MODPATH = nullptr;
 char *MODNAME = nullptr;
@@ -94,14 +98,46 @@ typedef struct [[gnu::packed]] {
 
 }
 
-int run_script(const char *arg1, const char *arg2, const char *arg3, const char *arg4, const char *arg5, const char *arg6){
+bool is_unmount_target(int uid) {
+    int32_t result = -1;
+    bool umount = false;
+    prctl(0xdeadbeef, CMD_UID_SHOULD_UMOUNT, uid % 100000, &umount, &result);
+    return umount;
+}
+
+
+bool is_granted_root_target(int uid) {
+    int32_t result = -1;
+    bool granted = false;
+    prctl(0xdeadbeef, CMD_UID_GRANTED_ROOT, uid % 100000, &granted, &result);
+    return granted;
+}
+
+int run_script(const char *arg1, const char *arg2, int pid, int uid, const char *arg5, int user){
+    int ksu_version = -1;
+    prctl(0xdeadbeef, 2, &ksu_version, 0, 0);
+
     string BB = "/data/adb/modules/magisk_proc_monitor/busybox";
     int p_fork = fork();
     int status = 0;
+    char pid_str[10];
+    char uid_str[10];
+    char user_str[10];
+    char ksu_version_str[30];
+    snprintf(pid_str, 10, "%d", pid);
+    snprintf(uid_str, 10, "%d", uid);
+    snprintf(user_str, 10, "%d", user);
+    snprintf(ksu_version_str, 30, "%d", ksu_version);
     if (p_fork == 0){
+    	// GENERAL
         setenv("API_VERSION", API_VERSION, 1);
         setenv("ASH_STANDALONE", "1", 1);
-        execl(BB.data(), "sh", arg1, arg2, arg3, arg4, arg5, arg6, (char*)0);
+        // ksu API
+        setenv("KSU_VERSION", ksu_version_str, 1);
+        setenv("KSU_ON_UNMOUNT", (is_unmount_target(uid))? "true" : "false", 1);
+        setenv("KSU_ON_GRANTED", (is_granted_root_target(uid))? "true" : "false", 1);
+        //
+        execl(BB.data(), "sh", arg1, arg2, pid_str, uid_str, arg5, user_str, (char*)0);
         _exit(1);
     } else if (p_fork > 0){
         waitpid(p_fork, &status, 0);
@@ -115,13 +151,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
     do {
         kill(pid, SIGSTOP);
         struct stat ppid_st, pid_st, init_st;
-        char pid_str[10];
-        char uid_str[10];
-        char user_str[10];
         int i=0;
-        snprintf(pid_str, 10, "%d", pid);
-        snprintf(uid_str, 10, "%d", uid);
-        snprintf(user_str, 10, "%d", user);
         vector<string> module_run;
         vector<string> module_run_st2;
 
@@ -130,7 +160,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
             string script = "/data/adb/modules/"s + module_list[i] + "/dynmount.sh"s;
             if (access(script.data(), F_OK) != 0) continue;
             LOGI("run %s#prepareEnterMntNs [%s] pid=[%d]", module_list[i].data(), process, pid);
-            int ret = run_script(script.data(), "prepareEnterMntNs", pid_str, uid_str, process, user_str);
+            int ret = run_script(script.data(), "prepareEnterMntNs", pid, uid, process, user);
                 LOGI("run %s#prepareEnterMntNs [%s] pid=[%d] exited with code %d", module_list[i].data(), process, pid, ret/256);
             if (ret == 0) module_run.emplace_back(module_list[i]);
         }
@@ -164,7 +194,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 string script = "/data/adb/modules/"s + module_run[i] + "/dynmount.sh"s;
                 // run script
                 LOGI("run %s#EnterMntNs [%s] pid=[%d]", module_run[i].data(), process, pid);
-                int ret = run_script(script.data(), "EnterMntNs", pid_str, uid_str, process, user_str);
+                int ret = run_script(script.data(), "EnterMntNs", pid, uid, process, user);
                 LOGI("run %s#EnterMntNs [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
                 if (ret == 0) module_run_st2.emplace_back(module_run[i]);
             }
@@ -173,7 +203,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 goto unblock_process;
             }
             kill(pid, SIGCONT);
-            string path = "/proc/"s + pid_str;
+            string path = "/proc/"s + to_string(pid);
             int count = 0;
             do {
                 int ret = stat(path.data(), &pid_st);
@@ -192,7 +222,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 string script = "/data/adb/modules/"s + module_run_st2[i] + "/dynmount.sh"s;
                 // run script
                 LOGI("run %s#OnSetUID [%s] pid=[%d]", module_run_st2[i].data(), process, pid);
-                int ret = run_script(script.data(), "OnSetUID", pid_str, uid_str, process, user_str);
+                int ret = run_script(script.data(), "OnSetUID", pid, uid, process, user);
                 LOGI("run %s#OnSetUID [%s] pid=[%d] exited with code %d", module_run[i].data(), process, pid, ret/256);
             }
         }
