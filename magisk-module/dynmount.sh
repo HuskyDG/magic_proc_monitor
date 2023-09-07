@@ -11,6 +11,9 @@ USERID="$5" # USER ID of app
 # Enviroment variables: MAGISKTMP, API_VERSION
 # API_VERSION = 3
 STAGE="$1" # prepareEnterMntNs or EnterMntNs or OnSetUID
+# API_VERSION = 4
+# Enviroment variables: KSU_VERSION, KSU_ON_UNMOUNT, KSU_ON_GRANTED
+
 
 RUN_SCRIPT(){
     if [ "$STAGE" == "prepareEnterMntNs" ]; then
