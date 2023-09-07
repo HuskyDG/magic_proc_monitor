@@ -94,27 +94,31 @@ int switch_mnt_ns(int pid) {
     return ret;
 }
 
-void __write_module_status(const char *status, const char *propfile, const char *propmirror){
-    FILE *fp = fopen(propfile, "re");
+int write_string(int fd, const char *str) {
+    return write(fd, str, strlen(str));
+}
+
+void __write_module_status(const char *status, int propfile_fd, int propmirror_fd){
+    FILE *fp = fdopen(propmirror_fd, "re");
     if (!fp) return;
-    FILE *fw = fopen(propmirror, "w");
-    if (!fw) {
-        fclose(fp);
-        return;
-    }
+    lseek(propfile_fd, 0, SEEK_SET);
+    lseek(propmirror_fd, 0, SEEK_SET);
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
     while ((read = getline(&line, &len, fp)) != -1){
         if (strstr(line, "description=") == line){
             char *z = line + strlen("description=");
-            fprintf(fw, "description=[ %s ] %s\n", status, z);
+            write_string(propfile_fd, "description=[ ");
+            write_string(propfile_fd, status);
+            write_string(propfile_fd, " ] ");
+            write_string(propfile_fd, z);
+            write_string(propfile_fd, "\n");
         } else { 
-            fprintf(fw, "%s", line);
+            write_string(propfile_fd, line);
+            write_string(propfile_fd, "\n");
         }
     }
-    fclose(fp);
-    fclose(fw);
 }
 
 void kill_all(const char *name) {

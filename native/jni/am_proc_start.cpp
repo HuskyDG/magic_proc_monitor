@@ -33,10 +33,8 @@ char *MODPATH = nullptr;
 char *MODNAME = nullptr;
 vector<string> module_list;
 
-char* prop_mirror = nullptr;
-char* prop_status = nullptr;
-
-bool write_propfd = false;
+int prop_mirror = -1;
+int prop_status = -1;
 
 extern "C" {
 
@@ -345,14 +343,13 @@ int main(int argc, char *argv[]) {
     }
     if (argc > 1 && argv[1] == "--start"sv) {
         kill_other(me);
-        int prop_fd[] = { open(PROPFILE, O_RDONLY), open(WPROPFILE , O_RDWR | O_CREAT, 0644) };
+        prop_mirror = open(PROPFILE, O_RDONLY);
+        prop_status = open(WPROPFILE , O_RDWR | O_CREAT, 0644);
         struct stat stat_buf;
-        write_propfd = stat(PROPFILE, &stat_buf) == 0 && sendfile(prop_fd[1], prop_fd[0], 0, stat_buf.st_size) > 0 &&
-            mount(WPROPFILE, PROPFILE, nullptr, MS_BIND, nullptr) == 0;
-        prop_mirror = new char[128];
-        prop_status = new char[128];
-        snprintf(prop_mirror, 128, "/proc/self/fd/%d", prop_fd[0]);
-        snprintf(prop_status, 128, "/proc/self/fd/%d", prop_fd[1]);
+        if (stat(PROPFILE, &stat_buf) == 0 && sendfile(prop_status, prop_mirror, 0, stat_buf.st_size) > 0) {
+            mount(WPROPFILE, PROPFILE, nullptr, MS_BIND, nullptr);
+            mount(nullptr, PROPFILE, nullptr, MS_PRIVATE, nullptr);
+        }
         set_nice_name(SECRETNAME);
         if (fork_dont_care()==0){
             fprintf(stderr, "New daemon: %d\n", self_pid());
