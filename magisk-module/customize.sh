@@ -33,5 +33,5 @@ if [ "$(magisk --sqlite "SELECT value FROM settings WHERE (key='zygisk')")" == "
 else
     ui_print "- Install as normal module"
     cp -af "$TMPDIR/libs/$ABI/proc_monitor" "$MODPATH/proc_monitor"
-    unzip -o "$ZIPFILE" service.sh -d "$MODPATH"
+    unzip -o "$ZIPFILE" post-fs-data.sh -d "$MODPATH"
 fi
