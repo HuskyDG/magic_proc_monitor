@@ -19,12 +19,18 @@ jobs:
       with:
         ndk-version: r24
     - name: Build
-      id: build
       run: |
         chmod 777 ./build.sh
         ./build.sh
     - name: Upload release
       uses: actions/upload-artifact@v3
       with:
-        name: magisk-am-proc-start-tool
+        name: logcat-proc-monitor
+        path: out/magisk-module
+    - name: Build Zygisk
+      run: sed -i "s/^FLAVOR=.*/FLAVOR=Zygisk/g" ./out/magisk-module/customize.sh
+    - name: Upload Zygisk release
+      uses: actions/upload-artifact@v3
+      with:
+        name: zygisk-proc-monitor
         path: out/magisk-module
