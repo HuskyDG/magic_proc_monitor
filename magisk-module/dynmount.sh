@@ -19,14 +19,18 @@ STAGE="$1" # prepareEnterMntNs or EnterMntNs or OnSetUID
 # For Magisk, please use magisk command, example: MAGISKTMP="$(magisk --path)"
 
 
-RUN_SCRIPT(){
-    if [ "$STAGE" == "prepareEnterMntNs" ]; then
+RUN_SCRIPT() {
+    case "$STAGE" in
+    "prepareEnterMntNs")
         prepareEnterMntNs
-    elif [ "$STAGE" == "EnterMntNs" ]; then
+        ;;
+    "EnterMntNs")
         EnterMntNs
-    elif [ "$STAGE" == "OnSetUID" ]; then
+        ;;
+    "OnSetUID")
         OnSetUID
-    fi
+        ;;
+    esac
 }
 
 prepareEnterMntNs(){
@@ -34,8 +38,8 @@ prepareEnterMntNs(){
 
     # su 2000 -c "cmd notification post -S bigtext -t 'Process monitor' 'Tag' 'pid="$PID" uid="$UID" "$PROC"'"
 
-    # call exit 0 to let script to be run in EnterMntNs
-    exit 1 # close script
+    # If you want to modify mounts in EnterMntNs, please call exit 0
+    exit 1 # close script if we don't need to modify mounts
 }
 
 
