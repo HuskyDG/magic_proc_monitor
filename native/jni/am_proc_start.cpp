@@ -35,6 +35,7 @@ vector<string> module_list;
 
 int prop_mirror = -1;
 int prop_status = -1;
+int proc_counter = 0;
 
 extern "C" {
 
@@ -246,11 +247,11 @@ void ProcessBuffer(struct logger_entry *buf) {
     if (event_header->tag != 30014) return;
     auto *am_proc_start = reinterpret_cast<const android_event_am_proc_start *>(eventData);
     {
-        ___write("\U0001F60A Process monitor is working fine");
-        char process_name[4098];
+        char buf[4098];
+        snprintf(buf, 4098, "\U0001F60A Process monitor has traced %d process%s", ++proc_counter, (proc_counter > 1)? "es" : "");___write(buf);
         // process name
-        snprintf(process_name, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
-        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, process_name, am_proc_start->user.data);
+        snprintf(buf, 4098, "%.*s", am_proc_start->process_name.length, am_proc_start->process_name.data);
+        run_daemon(am_proc_start->pid.data, am_proc_start->uid.data, buf, am_proc_start->user.data);
     }
 }
 
@@ -279,7 +280,7 @@ void ProcessBuffer(struct logger_entry *buf) {
                 continue;
             }
             if (!work) {
-                ___write("\U0001F60A Process monitor is working fine but am_proc_start is not detected");
+                ___write("\U0001F60A Process monitor is working fine but has not detected any process");
                 work = true;
             }
             ProcessBuffer(&msg.entry);
