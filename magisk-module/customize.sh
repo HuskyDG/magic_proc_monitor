@@ -4,7 +4,11 @@ if ! $BOOTMODE; then
     abort "! Install from Recovery is not supported"
 fi
 
-
+if [ "$KSU" == true ]; then
+    ln -s /data/adb/ksu/busybox "$MODPATH/busybox"
+else
+    ln -s /data/adb/magisk/busybox "$MODPATH/busybox"
+fi
 
 unzip -o "$ZIPFILE" -x module.prop service.sh -d "$TMPDIR"
 unzip -o "$ZIPFILE" module.prop -d "$MODPATH"
@@ -44,5 +48,4 @@ FLAVOR=Normal
     unzip -o "$ZIPFILE" post-fs-data.sh -d "$MODPATH"
 }
 
-cp -af "$TMPDIR/libs/$ABI/busybox" "$MODPATH/busybox"
 chmod 777 "$MODPATH/busybox"
