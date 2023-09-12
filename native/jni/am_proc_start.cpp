@@ -153,6 +153,7 @@ void run_scripts(int pid, int uid, const char *process, int user) {
         int i=0;
         vector<string> module_run;
         vector<string> module_run_st2;
+        string path = "/proc/"s + to_string(pid);
 
         // run script before enter the mount namespace of target app process
         for (auto i = 0; i < module_list.size(); i++){
@@ -171,6 +172,10 @@ void run_scripts(int pid, int uid, const char *process, int user) {
             return;
         }
         do {
+            if (stat(path.data(), &pid_st) || pid_st.st_uid != 0) {
+                LOGW("abort EnterMntNs [%s] pid=[%d], the uid has been changed before unshare", process, pid);
+                return;
+            }
             if (i>=30000) {
                 LOGW("timeout for wait EnterMntNs [%s] pid=[%d], the mount namespace is not unshared!", process, pid);
                 return;
@@ -202,7 +207,6 @@ void run_scripts(int pid, int uid, const char *process, int user) {
                 goto unblock_process;
             }
             kill(pid, SIGCONT);
-            string path = "/proc/"s + to_string(pid);
             int count = 0;
             do {
                 int ret = stat(path.data(), &pid_st);
